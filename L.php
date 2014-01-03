@@ -230,7 +230,7 @@ class L
                     }
 
                     require (empty($base) ? '' : $base . '/') . $file;
-                }
+                };
 
                 header('Content-Type: text/html; charset=UTF-8');
                 $template($file);
@@ -248,7 +248,7 @@ class L
             $handler = $handlers[$name];
             
             if (is_array($handler)) {
-                foreach ($key => $val) {
+                foreach ($handler as $key => $val) {
                     $args[$key] = $val;
                 }
 
