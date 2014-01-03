@@ -121,7 +121,7 @@ class L
             }
         }
 
-        return $result;
+        return empty($result) ? 'blank' : $result;
     }
 
     /**
@@ -178,6 +178,9 @@ class L
                     require $file;
                 }
             },
+
+            // 终止
+            'blank'     =>  function () {},
 
             // 返回来源页面
             'back'      =>  function () {
