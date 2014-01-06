@@ -659,8 +659,7 @@ class L
                 },
 
                 'ga'        =>  function ($html, $attrs, array $meta = NULL) {
-                    $html = '<script>
-var _gaq = _gaq || [];';
+                    $html = "\n<script>\nvar _gaq = _gaq || [];\n";
                     $html .= "_gaq.push(['_setAccount', '{$attrs['id']}']);\n";
 
                     if (!empty($meta)) {
