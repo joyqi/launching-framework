@@ -658,7 +658,7 @@ class L
                     return $html . ' content="' . htmlspecialchars($meta) . '" />';
                 },
 
-                'ga'        =>  function ($html, $attrs, array $meta) {
+                'ga'        =>  function ($html, $attrs, array $meta = NULL) {
                     $html = '<script>
 var _gaq = _gaq || [];';
                     $html .= "_gaq.push(['_setAccount', '{$attrs['id']}']);\n";
