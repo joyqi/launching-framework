@@ -639,7 +639,7 @@ class L
         }
 
         $schemes = array(
-            array('link', 'img', 'meta'),
+            array('link', 'img'),
             array(
                 'select'    =>  function ($html, $attrs, array $meta) {
                     $html .= '>';
