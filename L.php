@@ -272,6 +272,33 @@ class L
     }
 
     /**
+     * 自动加载
+     * 
+     * @param mixed $path 
+     * @param mixed $namespace 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function autoload($path, $namespace = NULL)
+    {
+        spl_autoload_register(function ($class) use ($path, $namespace) {
+            if (!empty($namespace)) {
+                if (0 == strpos(ltrim($class, '\\'), $namespace . '\\')) {
+                    $class = substr(ltrim($class, '\\'), strlen($namespace) + 1);
+                } else {
+                    return;
+                }
+            }
+
+            $file = $path . '/' . str_replace(array('_', '\\'), '/', $class) . '.php';
+            if (file_exists($file)) {
+                include_once $file;
+            }
+        });
+    }
+
+    /**
      * 判断是否符合协议规则 
      * 
      * @param string $scheme 
