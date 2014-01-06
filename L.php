@@ -610,6 +610,7 @@ class L
      */
     public static function html($tag, $attributes = NULL, $meta = NULL)
     {
+        $tag = strtolower($tag);
         $short = array(
             'icon'      =>  array('link', 'rel=shortcut+icon'),
             'css'       =>  array('link', 'rel=stylesheet'),
@@ -677,7 +678,7 @@ class L
             }
         }
 
-        if (in_array($schemes[0], $tag)) {
+        if (in_array($tag, $schemes[0])) {
             return $html . ' />';
         } else if (isset($schemes[1][$tag])) {
             return $schemes[1][$tag]($html, $meta);
