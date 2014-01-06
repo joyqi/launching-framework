@@ -612,38 +612,36 @@ class L
     {
         $tag = strtolower($tag);
         $short = array(
-            'icon'      =>  array('link', 'rel=shortcut+icon'),
-            'css'       =>  array('link', 'rel=stylesheet'),
-            'js'        =>  array('script', 'type=text/javascript'),
-            'search'    =>  array('link', 'rel=search&type=application/opensearchdescription%2Bxml'),
-            'rss1'      =>  array('link', 'rel=alternate&type=application/rdf%2Bxml'),
-            'rss2'      =>  array('link', 'rel=alternate&type=application/rss%2Bxml'),
-            'atom'      =>  array('link', 'rel=alternate&type=application/atom%2Bxml'),
-            'scale1'    =>  array('meta', 'name=viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
+            'icon'      =>  array('link', 'rel=shortcut+icon&href=$1$'),
+            'css'       =>  array('link', 'rel=stylesheet&href=$1$'),
+            'js'        =>  array('script', 'src=$1$'),
+            'search'    =>  array('link', 'rel=search&type=application/opensearchdescription%2Bxml&href=$1$&title=$2$'),
+            'rss1'      =>  array('link', 'rel=alternate&type=application/rdf%2Bxml&href=$1$'),
+            'rss2'      =>  array('link', 'rel=alternate&type=application/rss%2Bxml&href=$1$'),
+            'atom'      =>  array('link', 'rel=alternate&type=application/atom%2Bxml&href=$1$'),
+            'scale1'    =>  array('meta', 'name=viewport', 'width=device-width, initial-scale=1, maximum-scale=1'),
+            'ga'        =>  array('ga', 'id=$1$')
         );
         
         $preAttrs = array();
         if (isset($short[$tag])) {
             $define = $short[$tag];
             list ($tag) = $define;
+            $replace = array($attributes, $meta);
             
             if (isset($define[1])) {
-                if (!empty($attributes)) {
-                    $meta = $attributes;
-                }
-
-                $attributes = $define[1];
+                $attributes = str_replace(array('$1$', '$2$'), $replace, $define[1]);
             }
 
             if (isset($define[2])) {
-                $meta = $define[2];
+                $meta = str_replace(array('$1$', '$2$'), $replace, $define[2]);
             }
         }
 
         $schemes = array(
             array('link', 'img', 'meta'),
             array(
-                'select'    =>  function ($html, array $meta) {
+                'select'    =>  function ($html, $attrs, array $meta) {
                     $html .= '>';
                     foreach ($meta as $key => $val) {
                         $html .= "<option value=\"{$key}\">{$val}</option>";
@@ -652,17 +650,43 @@ class L
                     return $html . '</select>';
                 },
 
-                'input'     =>  function ($html, $meta) {
+                'input'     =>  function ($html, $attrs, $meta) {
                     return $html . ' value="' . htmlspecialchars($meta) . '" />';
                 },
 
-                'meta'      =>  function ($html, $meta) {
+                'meta'      =>  function ($html, $attrs, $meta) {
                     return $html . ' content="' . htmlspecialchars($meta) . '" />';
+                },
+
+                'ga'        =>  function ($html, $attrs, array $meta) {
+                    $html = '<script>
+var _gaq = _gaq || [];';
+                    $html .= "_gaq.push(['_setAccount', '{$attrs['id']}']);\n";
+
+                    if (!empty($meta)) {
+                        foreach ($meta as $key => $val) {
+                            if (is_int($key)) {
+                                $html .= "_gaq.push(['{$val}']);\n";
+                            } else {
+                                $val = json_encode($val);
+                                $html .= "_gaq.push(['{$key}', {$val}]);\n";
+                            }
+                        }
+                    }
+
+                    $html .= "(function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+})();
+</script>";
+                    return $html;
                 }
             )
         );
 
         $html = "<{$tag}";
+        $attrs = array();
 
         if (!empty($attributes)) {
             if (is_string($attributes)) {
@@ -679,11 +703,11 @@ class L
         }
 
         if (in_array($tag, $schemes[0])) {
-            return $html . ' />';
+            echo $html . ' />';
         } else if (isset($schemes[1][$tag])) {
-            return $schemes[1][$tag]($html, $meta);
+            echo $schemes[1][$tag]($html, $attrs, $meta);
         } else {
-            return $html . '>' . htmlspecialchars($meta) . "</{$tag}>";
+            echo $html . '>' . htmlspecialchars($meta) . "</{$tag}>";
         }
     }
 
