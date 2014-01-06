@@ -599,6 +599,92 @@ class L
     }
 
     /**
+     * html  
+     * 
+     * @param mixed $tag 
+     * @param mixed $attributes 
+     * @param mixed $meta 
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function html($tag, $attributes = NULL, $meta = NULL)
+    {
+        $short = array(
+            'icon'      =>  array('link', 'rel=shortcut+icon'),
+            'css'       =>  array('link', 'rel=stylesheet'),
+            'js'        =>  array('script', 'type=text/javascript'),
+            'search'    =>  array('link', 'rel=search&type=application/opensearchdescription%2Bxml'),
+            'rss1'      =>  array('link', 'rel=alternate&type=application/rdf%2Bxml'),
+            'rss2'      =>  array('link', 'rel=alternate&type=application/rss%2Bxml'),
+            'atom'      =>  array('link', 'rel=alternate&type=application/atom%2Bxml'),
+            'scale1'    =>  array('meta', 'name=viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
+        );
+        
+        $preAttrs = array();
+        if (isset($short[$tag])) {
+            $define = $short[$tag];
+            list ($tag, $attrs) = $define;
+
+            if (is_string($attrs)) {
+                parse_str($attrs, $preAttrs);
+            } else {
+                $preAttrs = (array) $attrs;
+            }
+
+            if (isset($define[2]) && NULL === $meta) {
+                $meta = $define[2];
+            }
+        }
+
+        $schemes = array(
+            array('link', 'img', 'meta'),
+            array(
+                'select'    =>  function ($html, array $meta) {
+                    $html .= '>';
+                    foreach ($meta as $key => $val) {
+                        $html .= "<option value=\"{$key}\">{$val}</option>";
+                    }
+
+                    return $html . '</select>';
+                },
+
+                'input'     =>  function ($html, $meta) {
+                    return $html . ' value="' . htmlspecialchars($meta) . '" />';
+                },
+
+                'meta'      =>  function ($html, $meta) {
+                    return $html . ' content="' . htmlspecialchars($meta) . '" />';
+                }
+            )
+        );
+
+        $html = "<{$tag}";
+
+        if (!empty($attributes)) {
+            if (is_string($attributes)) {
+                parse_str($attributes, $attrs);
+            } else {
+                $attrs = (array) $attributes;
+            }
+
+            $attrs = array_merge($preAttrs, $attrs);
+
+            foreach ($attrs as $key => $val) {
+                $html .= " {$key}=\"{$val}\"";
+            }
+        }
+
+        if (in_array($schemes[0], $tag)) {
+            return $html . ' />';
+        } else if (isset($schemes[1][$tag])) {
+            return $schemes[1][$tag]($html, $meta);
+        } else {
+            return $html . '>' . htmlspecialchars($meta) . "</{$tag}>";
+        }
+    }
+
+    /**
      * plugin 
      * 
      * @param mixed $name 
