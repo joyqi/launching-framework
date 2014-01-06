@@ -624,15 +624,17 @@ class L
         $preAttrs = array();
         if (isset($short[$tag])) {
             $define = $short[$tag];
-            list ($tag, $attrs) = $define;
+            list ($tag) = $define;
+            
+            if (isset($define[1])) {
+                if (!empty($attributes)) {
+                    $meta = $attributes;
+                }
 
-            if (is_string($attrs)) {
-                parse_str($attrs, $preAttrs);
-            } else {
-                $preAttrs = (array) $attrs;
+                $attributes = $define[1];
             }
 
-            if (isset($define[2]) && NULL === $meta) {
+            if (isset($define[2])) {
                 $meta = $define[2];
             }
         }
