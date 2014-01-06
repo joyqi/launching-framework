@@ -616,9 +616,9 @@ class L
             'css'       =>  array('link', 'rel=stylesheet&href=$1$'),
             'js'        =>  array('script', 'src=$1$'),
             'search'    =>  array('link', 'rel=search&type=application/opensearchdescription%2Bxml&href=$1$&title=$2$'),
-            'rss1'      =>  array('link', 'rel=alternate&type=application/rdf%2Bxml&href=$1$'),
-            'rss2'      =>  array('link', 'rel=alternate&type=application/rss%2Bxml&href=$1$'),
-            'atom'      =>  array('link', 'rel=alternate&type=application/atom%2Bxml&href=$1$'),
+            'rss1'      =>  array('link', 'rel=alternate&type=application/rdf%2Bxml&href=$1$&title=$2$'),
+            'rss2'      =>  array('link', 'rel=alternate&type=application/rss%2Bxml&href=$1$&title=$2$'),
+            'atom'      =>  array('link', 'rel=alternate&type=application/atom%2Bxml&href=$1$&title=$2$'),
             'scale1'    =>  array('meta', 'name=viewport', 'width=device-width, initial-scale=1, maximum-scale=1'),
             'ga'        =>  array('ga', 'id=$1$')
         );
@@ -627,7 +627,7 @@ class L
         if (isset($short[$tag])) {
             $define = $short[$tag];
             list ($tag) = $define;
-            $replace = array($attributes, $meta);
+            $replace = array(urlencode($attributes), urlencode($meta));
             
             if (isset($define[1])) {
                 $attributes = str_replace(array('$1$', '$2$'), $replace, $define[1]);
