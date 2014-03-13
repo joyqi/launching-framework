@@ -1,13 +1,13 @@
 <?php
 
 /**
- * L  
+ * Launching Framework Main Class  
  * 
  * @copyright Copyright (c) 2012 Typecho Team. (http://typecho.org)
  * @author Joyqi <magike.net@gmail.com> 
  * @license GNU General Public License 2.0
  */
-class L
+class L8
 {
     /**
      * _params 
@@ -18,135 +18,164 @@ class L
     private static $_params = array();
 
     /**
-     * _plugins
+     * 已经注入的对象池
      * 
      * @var array
      * @access private
      */
-    private static $_plugins = array();
+    private static $_injectedObjectsPool = array();
 
     /**
-     * 判断是否符合条件
+     * 挂起的注入对象栈, 用于解决交叉依赖的问题
      * 
-     * @param string $rule
-     * @access public
-     * @return boolean
+     * @var array
+     * @access private
      */
-    public static function is($rule)
+    private static $_holdingObjectsStack = array();
+
+    /**
+     * _injectiveObjects 
+     * 
+     * @var array
+     * @access private
+     */
+    private static $_injectiveObjects = array();
+
+    /**
+     * 已经注入的属性
+     *
+     * @var array
+     */
+    private $_injectedProperties = array();
+
+    /**
+     * __construct  
+     * 
+     * @access public
+     */
+    public function __construct()
     {
-        $parts = parse_url($rule);
+        // 使用链式注入初始化对象
+        $this->initChainedClass();
 
-        if (isset($parts['scheme'])) {
-            $schemes = explode('+', $params['scheme']);
-            foreach ($schemes as $scheme) {
-                if (!self::isScheme($scheme)) {
-                    return false;
-                }
-            }
+        // 将init作为实际的初始化方法, __construct方法保留
+        if (method_exists($this, 'init')) {
+            $args = func_get_args();
+            call_user_func_array(array($this, 'init'), $args);
         }
-
-        if (isset($parts['path'])) {
-            $params = array();
-            $path = preg_replace_callback('/\[([_0-9a-z]+)\]/i', function ($matches) use (&$params) {
-                $params[] = $matches[1];
-                return '%';
-            }, $parts['path']);
-            $path = str_replace('%', '([^\/]+)', preg_quote($path));
-
-            if (preg_match('|^' . $path . '$|', self::getRequest('path'), $matches)) {
-                array_shift($matches);
-
-                if (!empty($params)) {
-                    self::$_params = array_combine($params, $matches);
-                }
-            } else {
-                return false;
-            }
-        }
-
-        if (isset($parts['query'])) {
-            parse_str($parts['query'], $params);
-
-            if ($params) {
-                foreach ($params as $key => $val) {
-                    if (empty($val) ? NULL === self::get($key) : ($val != self::get($key))) {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        return true;
     }
 
     /**
-     * 绑定条件处理
+     * 链式注入
      * 
-     * @param array $map 
-     * @param mixed $default
-     * @static
-     * @access public
+     * @access private
      * @return void
      */
-    public static function bind(array $map, $default = 404)
+    private function initChainedClass()
     {
-        $result = $default;
+        $class = new ReflectionClass($this);
+        $shared = self::$_injectiveObjects;
+        
+        do {
+            $this->injectProperties($class, $shared);
+            $class = $class->getParentClass();
+        } while (!empty($class) && 'L8' != $class->getName());
+    }
 
-        foreach ($map as $rule => $action) {
-            if (self::is($rule)) {
-                try {
+    /**
+     * 根据给出类获取可以注入的属性列表
+     *
+     * @param ReflectionClass  $class      可以是对象也可以是类名
+     * @param array             $shared
+     * @throws Exception
+     */
+    private function injectProperties(ReflectionClass $class, array $shared)
+    {
+        $props = $this->getAvailableProperties($class);
 
-                    if (is_array($action)) {
-                        list ($class, $method) = $action;
-
-                        if (is_object($class)) {
-                            $object = $class;
-                            $result = $object->{$method};
-                        } else {
-                            $ref = new ReflectionClass($class);
-                            if ($ref->getMethod($method)->isStatic()) {
-                                $result = call_user_func($action);
-                            } else {
-                                $object = new $class();
-                                $result = $object->{$method}();
-                            }
-                        } 
-                    } else if (is_callable($action)) {
-                        $result = call_user_func($action);
-                    }
-
-                } catch (Exception $e) {
-                    $result = array(500, $e);
-                    break;
+        // 检查属性是否可以注入
+        foreach ($props as $name => $prop) {
+            if (isset($shared[$name])) {
+                // 首先检测交叉依赖
+                if (in_array($name, self::$_holdingObjectsStack)) {
+                    throw new Exception('Cross dependencies found in ' . $name);
                 }
 
-                break;
+                // 写入对象池
+                if (!isset(self::$_injectedObjectsPool[$name])) {
+                    self::$_holdingObjectsStack[] = $name;
+                    self::$_injectedObjectsPool[$name] = $this->createInstance($shared[$name]);
+                    self::$_holdingObjectsStack = array_slice(self::$_holdingObjectsStack, 0, -1);
+                }
+
+                $prop->setAccessible(true);
+                $prop->setValue($this, self::$_injectedObjectsPool[$name]);
             }
         }
+    }
 
-        if (!is_array($result)) {
-            $result = array($result);
-        }
+    /**
+     * getAvailableProperties  
+     * 
+     * @param ReflectionClass $class
+     * @access private
+     * @return array
+     */
+    private function getAvailableProperties(ReflectionClass $class)
+    {
+        $props = $class->getProperties();
+        $result = array();
 
-        // 对template做特殊处理以简化返回
-        if ('template' == $result[0] && !isset($result[2]) && isset($object)) {
-            $result[2] = $object;
+        foreach ($props as $prop) {
+            $name = $prop->getName();
+            if ($prop->isDefault() && 0 !== strpos($name, '_')
+                && (!isset($this->_injectedProperties[$name]) || $prop->isPrivate())) {
+                $result[$name] = $prop;
+                $this->_injectedProperties[$name] = true;
+            }
         }
 
         return $result;
     }
 
     /**
-     * handle
+     * 根据定义创建实例 
      * 
-     * @param array $result 
-     * @param array $handlers 
+     * @param mixed $define 
+     * @access private
+     * @return Object
+     */
+    private function createInstance($define)
+    {
+        if (is_array($define)) {
+            $className = $define[0];
+            $args = isset($define[1]) ? (is_array($define[1]) ? $define[1] : array($define[1])) : array();
+
+            $reflect = new ReflectionClass($className);
+            return $reflect->newInstanceArgs($args);
+        } else if (is_string($define)) {
+            return new $define();
+        } else if (is_callable($define)) {
+            return $define($this);
+        }
+
+        return false;
+    }
+
+    /**
+     * getDefaultHandlers
+     * 
      * @static
-     * @access public
+     * @access private
      * @return void
      */
-    public static function handle(array $result, array $handlers = array())
+    private static function getDefaultHandlers()
     {
+        static $defaultHandlers;
+        if (!empty($defaultHandlers)) {
+            return $defaultHandlers;
+        }
+
         $defaultHandlers = array(
             // 301 跳转
             301         =>  function ($url) {
@@ -249,8 +278,135 @@ class L
             }
         );
 
+        return $defaultHandlers;
+    }
+
+    /**
+     * inject 
+     * 
+     * @param mixed $name 
+     * @param mixed $define
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function inject($name, $define)
+    {
+        self::$_injectiveObjects[$name] = $define;
+    }
+
+    /**
+     * 判断是否符合条件
+     * 
+     * @param string $rule
+     * @access public
+     * @return boolean
+     */
+    public static function is($rule)
+    {
+        $parts = parse_url($rule);
+
+        if (isset($parts['scheme'])) {
+            $schemes = explode('+', $params['scheme']);
+            foreach ($schemes as $scheme) {
+                if (!self::isScheme($scheme)) {
+                    return false;
+                }
+            }
+        }
+
+        if (isset($parts['path'])) {
+            $params = array();
+            $path = preg_replace_callback('/\[([_0-9a-z]+)\]/i', function ($matches) use (&$params) {
+                $params[] = $matches[1];
+                return '%';
+            }, $parts['path']);
+            $path = str_replace('%', '([^\/]+)', preg_quote($path));
+
+            if (preg_match('|^' . $path . '$|', self::getRequest('path'), $matches)) {
+                array_shift($matches);
+
+                if (!empty($params)) {
+                    self::$_params = array_combine($params, $matches);
+                }
+            } else {
+                return false;
+            }
+        }
+
+        if (isset($parts['query'])) {
+            parse_str($parts['query'], $params);
+
+            if ($params) {
+                foreach ($params as $key => $val) {
+                    if (empty($val) ? NULL === self::get($key) : ($val != self::get($key))) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 绑定条件处理
+     * 
+     * @param array $map 
+     * @param array $handlers 
+     * @param mixed $default
+     * @static
+     * @access public
+     * @return void
+     */
+    public static function route(array $map, array $handlers = array(),  $default = 404)
+    {
+        $result = $default;
+
+        foreach ($map as $rule => $action) {
+            if (self::is($rule)) {
+                try {
+
+                    if (is_array($action)) {
+                        list ($class, $method) = $action;
+
+                        if (is_object($class)) {
+                            $object = $class;
+                            $result = $object->{$method};
+                        } else {
+                            $ref = new ReflectionClass($class);
+                            if ($ref->getMethod($method)->isStatic()) {
+                                $result = call_user_func($action);
+                            } else {
+                                $object = new $class();
+                                $result = $object->{$method}();
+                            }
+                        } 
+                    } else if (is_callable($action)) {
+                        $result = call_user_func($action);
+                    }
+
+                } catch (Exception $e) {
+                    $result = array(500, $e);
+                    break;
+                }
+
+                break;
+            }
+        }
+
+        if (!is_array($result)) {
+            $result = array($result);
+        }
+
+        // 对template做特殊处理以简化返回
+        if ('template' == $result[0] && !isset($result[2]) && isset($object)) {
+            $result[2] = $object;
+        }
+
         $name = array_shift($result);
         $args = $result;
+        $defaultHandlers = self::getDefaultHandlers();
 
         if (isset($handlers[$name])) {
             $handler = $handlers[$name];
@@ -707,36 +863,6 @@ class L
             echo $schemes[1][$tag]($html, $attrs, $meta);
         } else {
             echo $html . '>' . htmlspecialchars($meta) . "</{$tag}>";
-        }
-    }
-
-    /**
-     * plugin 
-     * 
-     * @param mixed $name 
-     * @param mixed $callback 
-     * @static
-     * @access public
-     * @return void
-     */
-    public static function plugin($name, $callback)
-    {
-        self::$_plugins[$name] = $callback;
-    }
-
-    /**
-     * __callStatic  
-     * 
-     * @param mixed $name 
-     * @param mixed $args 
-     * @static
-     * @access public
-     * @return void
-     */
-    public static function __callStatic($name, $args)
-    {
-        if (isset(self::$_plugins[$name])) {
-            return call_user_func_array(self::$_plugins[$name], $args);
         }
     }
 }
